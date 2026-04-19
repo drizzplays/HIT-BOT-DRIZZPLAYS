@@ -1,8 +1,6 @@
-name: Run Hits Bot Daily
+name: Run Hits Bot
 
 on:
-  schedule:
-    - cron: '0 16 * * *'  # runs daily (UTC time)
   workflow_dispatch:
 
 jobs:
