@@ -3,6 +3,9 @@ name: Run Hits Bot
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
