@@ -67,31 +67,37 @@ class SavantClient:
             "sort_order": "desc",
             "batters_lookup[]": batter_id,
             "pitchers_lookup[]": pitcher_id,
-            "hfGT": "R|PO|S|",
         }
+
         text = self.client.get_text(CSV_URL, params=params)
         cleaned = text.strip()
+
         if not cleaned:
+            print(f"Savant empty response for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return pd.DataFrame()
 
-        # Baseball Savant will occasionally return an empty body, a stray newline,
-        # or even an HTML error page with status 200. Do not let one bad response
-        # kill the full slate run.
         lowered = cleaned.lower()
         if cleaned.startswith("<") or "<html" in lowered or "<!doctype" in lowered:
+            print(f"Savant returned HTML/error page for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return pd.DataFrame()
 
         try:
             df = pd.read_csv(StringIO(cleaned))
         except EmptyDataError:
+            print(f"Savant CSV empty for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return pd.DataFrame()
-        except Exception:
+        except Exception as exc:
+            print(f"Savant CSV parse failed for batter_id={batter_id}, pitcher_id={pitcher_id}: {exc}")
             return pd.DataFrame()
 
         if df.empty:
+            print(f"Savant dataframe empty for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return df
+
         if "events" not in df.columns:
+            print(f"Savant missing 'events' column for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return pd.DataFrame()
+
         return df
 
     def summarize_matchup(
@@ -125,6 +131,7 @@ class SavantClient:
             "3B": int((ab_df["events"] == "triple").sum()),
             "HR": int((ab_df["events"] == "home_run").sum()),
         }
+
         last_n = ab_df.head(last_ab_window)
         results = [EVENT_MAP.get(str(ev), str(ev).upper()) for ev in last_n["events"].tolist()]
         ab = len(ab_df)
