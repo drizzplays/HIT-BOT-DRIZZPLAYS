@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import StringIO
+from pathlib import Path
 
 import pandas as pd
 from pandas.errors import EmptyDataError
@@ -53,8 +54,14 @@ class MatchupSummary:
 
 
 class SavantClient:
-    def __init__(self, client: HttpClient) -> None:
+    def __init__(self, client: HttpClient, debug_dir: str = "output/debug_savant") -> None:
         self.client = client
+        self.debug_dir = Path(debug_dir)
+        self.debug_dir.mkdir(parents=True, exist_ok=True)
+
+    def _write_debug_text(self, batter_id: int, pitcher_id: int, suffix: str, text: str) -> None:
+        path = self.debug_dir / f"b{batter_id}_p{pitcher_id}_{suffix}.txt"
+        path.write_text(text[:10000], encoding="utf-8")
 
     def _normalize_event_column(self, df: pd.DataFrame) -> pd.DataFrame:
         for col in POSSIBLE_EVENT_COLUMNS:
@@ -84,34 +91,45 @@ class SavantClient:
 
         if not cleaned:
             print(f"Savant empty response for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            self._write_debug_text(batter_id, pitcher_id, "empty", "")
             return pd.DataFrame()
 
         lowered = cleaned.lower()
         if cleaned.startswith("<") or "<html" in lowered or "<!doctype" in lowered:
             print(f"Savant returned HTML/error page for batter_id={batter_id}, pitcher_id={pitcher_id}")
-            print(cleaned[:500])
+            self._write_debug_text(batter_id, pitcher_id, "html", cleaned)
             return pd.DataFrame()
 
         try:
             df = pd.read_csv(StringIO(cleaned))
         except EmptyDataError:
             print(f"Savant CSV empty for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            self._write_debug_text(batter_id, pitcher_id, "csv_empty", cleaned)
             return pd.DataFrame()
         except Exception as exc:
             print(f"Savant CSV parse failed for batter_id={batter_id}, pitcher_id={pitcher_id}: {exc}")
-            print(cleaned[:500])
+            self._write_debug_text(batter_id, pitcher_id, "parse_error", cleaned)
             return pd.DataFrame()
 
         if df.empty:
             print(f"Savant dataframe empty for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            self._write_debug_text(batter_id, pitcher_id, "df_empty", cleaned)
             return df
 
         df = self._normalize_event_column(df)
 
         if "events" not in df.columns:
+            cols = list(df.columns)
             print(f"Savant missing event column for batter_id={batter_id}, pitcher_id={pitcher_id}")
-            print(f"Columns returned: {list(df.columns)}")
-            print(f"Raw preview: {cleaned[:500]}")
+            print(f"Columns returned: {cols}")
+            preview = df.head(3).to_csv(index=False)
+            print(f"Preview rows:\n{preview}")
+            self._write_debug_text(
+                batter_id,
+                pitcher_id,
+                "missing_events",
+                "COLUMNS:\n" + ",".join(cols) + "\n\nPREVIEW:\n" + preview + "\n\nRAW:\n" + cleaned,
+            )
             return pd.DataFrame()
 
         return df
