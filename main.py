@@ -36,12 +36,21 @@ def _passes_filters(summary: MatchupSummary) -> bool:
 
 
 def build_game_results(game: Game, savant: SavantClient, client: HttpClient) -> tuple[str, list[MatchupSummary]]:
+    label = f"{game.away_team.abbreviation} @ {game.home_team.abbreviation}"
+
     if not game.home_pitcher or not game.away_pitcher:
-        return f"{game.away_team.abbreviation} @ {game.home_team.abbreviation}", []
+        print(f"{label}: skipped because probable pitchers missing")
+        return label, []
 
     away_hitters, home_hitters = _select_hitters(game, client)
 
+    print(
+        f"{label}: away_hitters={len(away_hitters)} vs {game.home_pitcher.full_name}, "
+        f"home_hitters={len(home_hitters)} vs {game.away_pitcher.full_name}"
+    )
+
     summaries: list[MatchupSummary] = []
+
     for hitter in away_hitters:
         try:
             summary = savant.summarize_matchup(
@@ -54,6 +63,7 @@ def build_game_results(game: Game, savant: SavantClient, client: HttpClient) -> 
         except Exception as exc:
             print(f"Skipping matchup {hitter.full_name} vs {game.home_pitcher.full_name}: {exc}")
             summary = None
+
         if summary:
             summaries.append(summary)
 
@@ -69,13 +79,18 @@ def build_game_results(game: Game, savant: SavantClient, client: HttpClient) -> 
         except Exception as exc:
             print(f"Skipping matchup {hitter.full_name} vs {game.away_pitcher.full_name}: {exc}")
             summary = None
+
         if summary:
             summaries.append(summary)
 
     summaries.sort(key=lambda s: (-s.hit_rate, -s.hits, -s.ab, s.batter_name))
+
+    total_before_cap = len(summaries)
     if SETTINGS.max_hitters_per_game > 0:
         summaries = summaries[: SETTINGS.max_hitters_per_game]
-    return f"{game.away_team.abbreviation} @ {game.home_team.abbreviation}", summaries
+
+    print(f"{label}: summaries_found={total_before_cap}, summaries_after_cap={len(summaries)}")
+    return label, summaries
 
 
 def main() -> int:
@@ -83,15 +98,24 @@ def main() -> int:
     savant = SavantClient(client)
     games = get_schedule(client, SETTINGS.run_date)
 
+    print(f"Games found: {len(games)}")
+
     output: list[dict[str, object]] = []
     game_results: list[tuple[str, list[MatchupSummary]]] = []
     qualified_count = 0
+    all_summary_count = 0
 
     for game in games:
         label, summaries = build_game_results(game, savant, client)
         game_results.append((label, summaries))
+
         qualified = [summary for summary in summaries if _passes_filters(summary)]
+
+        print(f"{label}: total_summaries={len(summaries)} | qualified={len(qualified)}")
+
+        all_summary_count += len(summaries)
         qualified_count += len(qualified)
+
         output.append(
             {
                 "game": label,
@@ -99,6 +123,9 @@ def main() -> int:
                 "qualified_results": [asdict(s) for s in qualified],
             }
         )
+
+    print(f"TOTAL SUMMARIES: {all_summary_count}")
+    print(f"TOTAL QUALIFIED: {qualified_count}")
 
     csv_paths = export_matchup_csvs(
         run_date=SETTINGS.run_date,
@@ -111,6 +138,7 @@ def main() -> int:
             {
                 "run_date": SETTINGS.run_date,
                 "csv_files": {key: str(value) for key, value in csv_paths.items()},
+                "total_summaries": all_summary_count,
                 "qualified_matchups": qualified_count,
                 "games": output,
             },
