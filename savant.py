@@ -35,6 +35,8 @@ EVENT_MAP = {
     "hit_by_pitch": "HBP",
 }
 
+POSSIBLE_EVENT_COLUMNS = ["events", "event", "result", "play_result"]
+
 
 @dataclass(frozen=True)
 class MatchupSummary:
@@ -54,6 +56,15 @@ class SavantClient:
     def __init__(self, client: HttpClient) -> None:
         self.client = client
 
+    def _normalize_event_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        for col in POSSIBLE_EVENT_COLUMNS:
+            if col in df.columns:
+                if col != "events":
+                    df = df.copy()
+                    df["events"] = df[col]
+                return df
+        return df
+
     def fetch_matchup_rows(self, batter_id: int, pitcher_id: int) -> pd.DataFrame:
         params = {
             "all": "true",
@@ -62,7 +73,6 @@ class SavantClient:
             "game_date_lt": "2099-12-31",
             "min_pas": 0,
             "min_results": 0,
-            "group_by": "",
             "sort_col": "game_date",
             "sort_order": "desc",
             "batters_lookup[]": batter_id,
@@ -79,6 +89,7 @@ class SavantClient:
         lowered = cleaned.lower()
         if cleaned.startswith("<") or "<html" in lowered or "<!doctype" in lowered:
             print(f"Savant returned HTML/error page for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            print(cleaned[:500])
             return pd.DataFrame()
 
         try:
@@ -88,14 +99,19 @@ class SavantClient:
             return pd.DataFrame()
         except Exception as exc:
             print(f"Savant CSV parse failed for batter_id={batter_id}, pitcher_id={pitcher_id}: {exc}")
+            print(cleaned[:500])
             return pd.DataFrame()
 
         if df.empty:
             print(f"Savant dataframe empty for batter_id={batter_id}, pitcher_id={pitcher_id}")
             return df
 
+        df = self._normalize_event_column(df)
+
         if "events" not in df.columns:
-            print(f"Savant missing 'events' column for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            print(f"Savant missing event column for batter_id={batter_id}, pitcher_id={pitcher_id}")
+            print(f"Columns returned: {list(df.columns)}")
+            print(f"Raw preview: {cleaned[:500]}")
             return pd.DataFrame()
 
         return df
@@ -115,6 +131,8 @@ class SavantClient:
         pa_df = df.dropna(subset=["events"]).copy()
         if pa_df.empty:
             return None
+
+        pa_df["events"] = pa_df["events"].astype(str).str.strip().str.lower()
 
         ab_df = pa_df[~pa_df["events"].isin(NON_AB_EVENTS)].copy()
         if ab_df.empty:
