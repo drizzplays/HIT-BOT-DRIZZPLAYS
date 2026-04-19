@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from io import StringIO
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 from http_client import HttpClient
 
@@ -69,9 +70,24 @@ class SavantClient:
             "hfGT": "R|PO|S|",
         }
         text = self.client.get_text(CSV_URL, params=params)
-        if not text.strip():
+        cleaned = text.strip()
+        if not cleaned:
             return pd.DataFrame()
-        df = pd.read_csv(StringIO(text))
+
+        # Baseball Savant will occasionally return an empty body, a stray newline,
+        # or even an HTML error page with status 200. Do not let one bad response
+        # kill the full slate run.
+        lowered = cleaned.lower()
+        if cleaned.startswith("<") or "<html" in lowered or "<!doctype" in lowered:
+            return pd.DataFrame()
+
+        try:
+            df = pd.read_csv(StringIO(cleaned))
+        except EmptyDataError:
+            return pd.DataFrame()
+        except Exception:
+            return pd.DataFrame()
+
         if df.empty:
             return df
         if "events" not in df.columns:

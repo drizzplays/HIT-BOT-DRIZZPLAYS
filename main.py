@@ -43,24 +43,32 @@ def build_game_results(game: Game, savant: SavantClient, client: HttpClient) -> 
 
     summaries: list[MatchupSummary] = []
     for hitter in away_hitters:
-        summary = savant.summarize_matchup(
-            batter_id=hitter.id,
-            pitcher_id=game.home_pitcher.id,
-            batter_name=hitter.full_name,
-            pitcher_name=game.home_pitcher.full_name,
-            last_ab_window=SETTINGS.last_ab_window,
-        )
+        try:
+            summary = savant.summarize_matchup(
+                batter_id=hitter.id,
+                pitcher_id=game.home_pitcher.id,
+                batter_name=hitter.full_name,
+                pitcher_name=game.home_pitcher.full_name,
+                last_ab_window=SETTINGS.last_ab_window,
+            )
+        except Exception as exc:
+            print(f"Skipping matchup {hitter.full_name} vs {game.home_pitcher.full_name}: {exc}")
+            summary = None
         if summary:
             summaries.append(summary)
 
     for hitter in home_hitters:
-        summary = savant.summarize_matchup(
-            batter_id=hitter.id,
-            pitcher_id=game.away_pitcher.id,
-            batter_name=hitter.full_name,
-            pitcher_name=game.away_pitcher.full_name,
-            last_ab_window=SETTINGS.last_ab_window,
-        )
+        try:
+            summary = savant.summarize_matchup(
+                batter_id=hitter.id,
+                pitcher_id=game.away_pitcher.id,
+                batter_name=hitter.full_name,
+                pitcher_name=game.away_pitcher.full_name,
+                last_ab_window=SETTINGS.last_ab_window,
+            )
+        except Exception as exc:
+            print(f"Skipping matchup {hitter.full_name} vs {game.away_pitcher.full_name}: {exc}")
+            summary = None
         if summary:
             summaries.append(summary)
 
