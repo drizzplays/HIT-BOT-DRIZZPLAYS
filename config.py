@@ -14,7 +14,7 @@ class Settings:
     run_date: str = os.getenv("RUN_DATE", date.today().isoformat())
     min_ab: int = int(os.getenv("MIN_AB", "3"))
     min_hits: int = int(os.getenv("MIN_HITS", "1"))
-    min_hit_rate: float = float(os.getenv("MIN_HIT_RATE", "0.333"))
+    min_hit_rate: float = float(os.getenv("MIN_HIT_RATE", "0.133"))
     max_hitters_per_game: int = int(os.getenv("MAX_HITTERS_PER_GAME", "0"))
     search_mode: str = os.getenv("SEARCH_MODE", "all_hitters").strip().lower()
     discord_webhook_url: str | None = os.getenv("DISCORD_WEBHOOK_URL")
