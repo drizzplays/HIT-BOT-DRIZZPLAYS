@@ -1,49 +1,33 @@
-name: Daily Hits Matchup Bot
+name: Run Hits Bot Daily
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 15 * * *'
+    - cron: '0 16 * * *'  # runs daily (UTC time)
+  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
       - name: Run bot
-        env:
-          MIN_AB: '3'
-          MIN_HITS: '1'
-          MIN_HIT_RATE: '0.333'
-          MAX_HITTERS_PER_GAME: '0'
-          SEARCH_MODE: 'all_hitters'
-          REQUEST_TIMEOUT: '30'
-          LAST_AB_WINDOW: '10'
-          WRITE_LATEST_CSV: '1'
-          LATEST_FILE_NAME: 'latest_qualified.csv'
-          INCLUDE_ALL_MATCHUPS_CSV: '0'
         run: python main.py
 
-      - name: Commit refreshed CSV files
+      - name: Commit updated CSV
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add output/*.csv
-          git diff --cached --quiet && exit 0
-          git commit -m "Update hits matchup CSVs"
+          git config --global user.name "bot"
+          git config --global user.email "bot@github.com"
+          git add output/latest_qualified.csv
+          git commit -m "update qualified hits" || echo "no changes"
           git push
